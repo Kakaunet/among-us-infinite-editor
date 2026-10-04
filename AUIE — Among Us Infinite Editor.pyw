@@ -49,10 +49,12 @@ DEFAULT_SETTINGS_PATH = (
     / "AppData" / "LocalLow" / "Innersloth" / "Among Us" / "settings.amogus"
 )
 
-# A v19-format Normal options blob used only as a convenient starter.
+# Built-in v19-format Normal options fallback. This is also used for the
+# first-run "Chaos" preset.
 DEFAULT_BLOB = (
-    "DJQAAAEAZA8AAQAAAAAA4D8AAABAAAAAQG8SgzoBAQEDAAAAAQAeAAAAHgAAAAAKAQEBAAALBQABZAMAAAABAAIAAmQCAAAA/wQAAWQDAAAAgAEDAANkAgAAAP8JAAFkAgAAAP8KAAJkAwAAAP8BCAAEZAIAAP8BDAACZAEAAAQSAAFkAQAAChMAAmQBAAAAFQADZAEAAAA="
+    "DJQAAAEAZA8AAQAAAAAA4D8AAABAAAAAQG8SgzoBAQEDAAAAAQAeAAAAHgAAAAAKAQEBAAALBQABZAMAAAEA/wIAAmQCAAAA/wQAAWQDAAAA/wEDAANkAgAAAP8JAAFkAgAAAP8KAAJkAwAAAP8ACAADZAIAAP8BDAACZAEAAAQSAAFkAQAAChMAAmQBAAAAFQALZAEAAAA="
 )
+DEFAULT_PRESET_NAME = "Chaos"
 
 MAP_NAMES = {
     0: "The Skeld",
@@ -522,8 +524,13 @@ class App(tk.Tk):
             "ghost3": tk.StringVar(value="Maximum Population: —\nWith Roles: —\nExcess Roles: —\nWithout Roles: —"),
         }
         self._build_ui()
+        self._initialize_first_run_presets()
+        # If there is no explicit startup source to restore, use the built-in
+        # Chaos configuration as the editor's safe, known fallback.
         self.load_blob(DEFAULT_BLOB, quiet=True)
         self._refresh_presets()
+        if DEFAULT_PRESET_NAME in self._read_presets():
+            self.preset_var.set(DEFAULT_PRESET_NAME)
 
     @staticmethod
     def _enum_label(mapping: Dict[int, str], value: int) -> str:
@@ -1569,6 +1576,21 @@ class App(tk.Tk):
         Path(path).write_text(blob + "\n", encoding="utf-8")
         self.status.set(f"Saved {path}")
         self.log(f"Saved normalHostOptions Base64 to file: {path}")
+
+    def _initialize_first_run_presets(self):
+        """Create the built-in Chaos preset only for a fresh preset store.
+
+        Existing preset files are left untouched, so user-created presets and
+        an intentionally modified/deleted Chaos preset are never overwritten.
+        """
+        if PRESETS_PATH.exists():
+            return
+        try:
+            self._write_presets({DEFAULT_PRESET_NAME: DEFAULT_BLOB})
+        except Exception as e:
+            # Presets are optional; startup should still succeed if the app
+            # cannot create its local preset file.
+            self.log(f"Could not create first-run preset '{DEFAULT_PRESET_NAME}': {e}")
 
     def _read_presets(self) -> Dict[str, str]:
         if not PRESETS_PATH.exists():
